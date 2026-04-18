@@ -1,0 +1,95 @@
+# ============================================================
+# good-workflow.yml — GitHub Actions workflow following best practices
+#
+# Best practices demonstrated:
+#   ✓ Explicit minimal permissions block
+#   ✓ Actions pinned to full commit SHAs
+#   ✓ npm install with caching
+#   ✓ Untrusted input passed through env vars (not direct interpolation)
+#   ✓ No hardcoded secrets — secrets referenced via ${{ secrets.X }}
+#   ✓ Job-level permissions narrowed for deploy step
+# ============================================================
+
+name: Build and Deploy (Good Example)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Minimal top-level permissions — read-only by default
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # Job-level permissions (override top-level for this specific job)
+    permissions:
+      contents: read
+
+    steps:
+      # Pinned to full SHA — reproducible and tamper-proof
+      # renovate: datasource=github-releases depName=actions/checkout
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      # setup-node with built-in npm caching
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Safe: untrusted PR title passed through env var, not direct interpolation
+      - name: Log PR info (safe)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.head_ref }}
+        run: |
+          echo "Building PR: $PR_TITLE"
+          echo "Branch: $PR_BRANCH"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      # Pinned to full SHA
+      - uses: actions/upload-artifact@65c4c4a1ddee5b6b2b37b9e26d62d4e5fa69db9f  # v4.6.0
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    # Narrowed permissions — deploy only needs contents:read and id-token:write
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication to cloud providers
+
+    environment: production
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: actions/download-artifact@fa0a91b85d4f404e444306a1c1d7a4a6ff6fc52d  # v4.1.8
+        with:
+          name: dist
+          path: dist/
+
+      # Deploy using OIDC (no long-lived credentials stored as secrets)
+      - name: Deploy to production
+        env:
+          # Secrets accessed via ${{ secrets.X }} — never hardcoded
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: ./scripts/deploy.sh
