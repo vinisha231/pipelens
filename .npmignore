@@ -1,0 +1,39 @@
+# Files and directories to exclude from the npm package.
+#
+# The npm package should only include:
+#   dist/**   (compiled JS + type declarations)
+#   README.md
+#   LICENSE
+#   package.json
+
+# Source (TypeScript) — not needed in the published package
+src/
+
+# Tests — not needed in the published package
+tests/
+
+# Examples — useful for GitHub but not needed in npm
+examples/
+
+# Development config files
+tsconfig.json
+.eslintrc*
+.eslintignore
+vitest.config*
+
+# CI/CD
+.github/
+
+# Development artifacts
+.env
+*.log
+coverage/
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
